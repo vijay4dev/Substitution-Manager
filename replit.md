@@ -1,44 +1,48 @@
-# [Project name]
+# Substitution Manager
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A daily school administration tool for the principal of Kawar International School, Pali — to assign and print teacher substitutions each morning.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/substitution-manager run dev` — run the frontend app
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required secrets: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Frontend: React + Vite + Tailwind CSS (shadcn/ui)
+- Backend: Firebase (Firestore + Firebase Auth) — no separate server
+- Excel parsing: SheetJS (`xlsx`)
+- Routing: wouter
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/substitution-manager/src/` — main app
+- `artifacts/substitution-manager/src/lib/firebase.ts` — Firebase init
+- `artifacts/substitution-manager/src/lib/auth.tsx` — AuthContext + ProtectedRoute
+- `artifacts/substitution-manager/src/pages/` — Login, Import, Assignments, Print, Reports
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Firebase is the sole backend — no Express API server used by the frontend
+- Timetable import is client-side: SheetJS parses the Excel file in the browser, then writes to Firestore in batched writes (≤500 per batch)
+- Free period rule: a slot is free ONLY if the cell is truly empty/whitespace — any text (including "REM", "HALF DAY", etc.) means the teacher is occupied
+- No signup UI — principal account created directly in Firebase console
+- Print view uses CSS `@media print` to hide navigation/buttons and render a clean A4 table
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
-
-## User preferences
-
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- **Login** — single principal account via Firebase email/password auth
+- **Import** — one-time upload of master timetable Excel (.xlsx); parses and writes to Firestore; re-upload replaces all data
+- **Daily Assignments** — pick a date, see free teachers per period, assign substitutions with conflict prevention, delete rows to free teachers back up
+- **Print View** — clean printable table (Pr. / Class / Substitution / Sign.) for the selected date, matching the school's physical format
+- **Weekly Reports** — view substitution counts per teacher for a selected week, sorted by count descending
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Firestore compound queries on `timetable` (day + period + isFree) and `substitutions` (date) may require index creation — Firebase console will provide a one-click link on first query
+- The principal must be created in the Firebase console (Authentication → Users → Add user); there is no signup UI in the app
 
 ## Pointers
 
