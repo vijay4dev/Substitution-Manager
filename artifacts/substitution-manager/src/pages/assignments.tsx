@@ -70,7 +70,7 @@ export default function Assignments() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : (
-              [1, 2, 3, 4, 5, 6, 7, 8].map((period) => (
+              (dayName === "Saturday" ? [1, 2, 3, 4] : [1, 2, 3, 4, 5, 6, 7, 8]).map((period) => (
                 <PeriodCard 
                   key={period}
                   period={period} 
