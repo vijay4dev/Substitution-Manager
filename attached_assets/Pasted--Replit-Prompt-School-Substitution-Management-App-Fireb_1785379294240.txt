@@ -1,0 +1,117 @@
+# Replit Prompt: School Substitution Management App (Firebase)
+
+Build a full-stack web app called **Substitution Manager** for a school principal to assign daily teacher substitutions, using React (Vite) + Tailwind CSS on the frontend and Firebase (Firestore + Firebase Auth) on the backend.
+
+## Context / Domain
+
+The school has a master weekly timetable Excel file with this exact structure:
+- Row 1: Day names (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday), each day spanning 8 merged columns
+- Row 2: Period numbers 1-8, repeating under each day
+- Row 3: header label "Teacher Name" (ignore)
+- Row 4 onwards: Column A = teacher name, remaining columns = what that teacher is doing in that day/period slot (a class name like "VIII A", a subject/activity like "BAL SABHA", "HALF DAY", or blank/whitespace-only)
+
+**Free period definition (important, do not deviate):** A cell counts as a free period ONLY if it is truly empty or contains only whitespace. Any text value at all — including "REM" (remedial class), "HALF DAY", "BAL SABHA", "G.K", "VOC", "WEL", "SANS", "CO", "NI", or any class name — means the teacher is NOT free that period. Do not treat any of these labels as free periods.
+
+## Core Requirements
+
+### 1. Authentication
+- Only ONE role: Principal (single admin account)
+- Use Firebase Authentication (email/password). Create a simple login screen. No public signup — create the principal's account directly in the Firebase console (or a one-time seed script). No signup UI at all.
+- All routes except login are protected (wrap app in an auth guard checking `onAuthStateChanged`).
+
+### 2. One-time Timetable Import
+- On first setup, principal uploads the master timetable Excel file (.xlsx) via a file upload screen.
+- Parse it using the `xlsx` (SheetJS) library client-side, following the exact row/column structure described above.
+- Write parsed data into Firestore:
+  - Collection `timetable`, one document per teacher+day+period slot:
+    ```
+    { teacherName, day, period, slotValue, isFree }
+    ```
+  - Collection `teachers`, one document per distinct teacher name found:
+    ```
+    { name }
+    ```
+- This is a ONE-TIME import used purely as reference data to determine who is free. No in-app editing of the timetable itself is needed. If the principal wants to change it, they re-upload the Excel; the app should delete all existing `timetable` docs (batch delete) and re-insert fresh ones.
+- Use Firestore batched writes (max 500 per batch) since the sheet has ~40+ teachers x 6 days x 8 periods = potentially 1000+ rows.
+
+### 3. Daily Substitution Assignment Screen (main screen)
+- Principal picks a date (a date picker). Auto-derive the day name (Monday-Saturday) from that date.
+- Show periods 1 through 8 as sections/cards.
+- For each period, query Firestore `timetable` where `day == selectedDay AND period == N AND isFree == true` to get the list of free teachers for that period.
+- For each period, the principal can add one or more substitution rows:
+  - Select a **Class** that needs coverage (free text input, since the class needing substitution may not be a fixed dropdown — principal knows which class's teacher is absent)
+  - Select a **substitute teacher** from the free-teacher dropdown for that period
+  - "Add" button adds the row to that period's list
+  - Allow adding multiple rows per period (multiple classes may need coverage in the same period, with different free teachers assigned to each)
+- **Conflict prevention:** once a teacher is assigned as a substitute for a given date+period, remove them from the free-teacher dropdown for any other class in that same period (they can't cover two classes at once). Check this against both locally-added rows and any already-saved substitutions for that date+period.
+- A "Save" action writes each row into a `substitutions` collection:
+  ```
+  { date, day, period, class, teacherId, teacherName, createdAt }
+  ```
+- Assigned rows should remain visible/editable if the principal reopens that date later (query `substitutions` where `date == selectedDate` on page load, and allow deleting a row to free that teacher back up).
+
+### 4. Print View
+- After assigning substitutions for a date, show a "Print" button.
+- This opens a print-friendly page/layout that replicates the attached photo's format exactly:
+  - Header: school name ("KAWAR INTERNATIONAL SCHOOL, PALI") and the selected date/day
+  - A table with 4 columns: **Pr.** (period number), **Class**, **substitution** (assigned teacher name), **Sign.** (blank column for physical signature)
+  - Rows ordered by period number, only including periods that have at least one substitution assigned
+  - Use `window.print()` with a CSS `@media print` stylesheet so it prints cleanly on a single page (borders around cells like the photo, clean sans-serif font, no browser chrome)
+
+### 5. Weekly Report Screen
+- A separate "Reports" screen where the principal picks a week (or defaults to current week, Monday-Saturday).
+- Query `substitutions` where `date` is within the selected week's range.
+- Group results client-side by `teacherName`, showing: **Teacher Name | Number of Substitutions this week | Dates/periods/classes assigned** (expandable row or inline list).
+- Sort by substitution count descending (so the principal can see who's doing the most substitutions, useful for fairness).
+
+## Firestore Data Model
+
+```
+teachers/{teacherId}
+  name: string
+
+timetable/{docId}
+  teacherName: string
+  day: string          // "Monday".."Saturday"
+  period: number        // 1..8
+  slotValue: string
+  isFree: boolean
+
+substitutions/{docId}
+  date: string          // "YYYY-MM-DD"
+  day: string
+  period: number
+  class: string
+  teacherId: string
+  teacherName: string
+  createdAt: timestamp
+```
+
+### Firestore Security Rules
+Restrict all reads/writes to the single authenticated principal user (match on a fixed admin UID, or check a custom claim):
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == "PRINCIPAL_UID_HERE";
+    }
+  }
+}
+```
+
+## Tech Notes
+- Use the Firebase JS SDK v9+ (modular): `firebase/app`, `firebase/auth`, `firebase/firestore`
+- Use the `xlsx` npm package to parse the uploaded Excel file
+- Use composite Firestore indexes where needed (Firestore will prompt with a console link the first time a compound query runs — create the index for `timetable` on `day + period + isFree`, and for `substitutions` on `date`)
+- Keep UI clean and simple — this is used daily by a school principal, not a technical user. Favor big clear buttons, clear date/period navigation, minimal clicks to assign a substitution.
+- Mobile-responsive is a nice-to-have but desktop/print usage is primary.
+
+## Build Order
+1. Firebase project setup (Auth + Firestore) + security rules + single principal user created in console
+2. Login screen + protected routing
+3. Excel upload + parser + batched writes into `timetable`/`teachers` collections
+4. Daily assignment screen with free-teacher lookup per period
+5. Print view matching the reference photo format
+6. Weekly report screen
