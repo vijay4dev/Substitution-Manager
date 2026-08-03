@@ -1,6 +1,6 @@
 import { useAuth } from "@/lib/auth";
 import { Link, useLocation } from "wouter";
-import { LogOut, CalendarDays, FileSpreadsheet, BarChart3, School } from "lucide-react";
+import { LogOut, CalendarDays, FileSpreadsheet, BarChart3, School, UserX } from "lucide-react";
 import { Button } from "./ui/button";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -13,6 +13,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { href: "/assignments", label: "Daily Assignments", icon: CalendarDays },
+    { href: "/absent-teacher", label: "Absent Teacher", icon: UserX },
     { href: "/reports", label: "Reports", icon: BarChart3 },
     { href: "/import", label: "Import Timetable", icon: FileSpreadsheet },
   ];

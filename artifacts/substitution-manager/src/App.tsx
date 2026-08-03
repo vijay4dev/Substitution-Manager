@@ -6,6 +6,7 @@ import { AuthProvider, ProtectedRoute } from '@/lib/auth';
 
 import Login from '@/pages/login';
 import Assignments from '@/pages/assignments';
+import AbsentTeacher from '@/pages/absent-teacher';
 import ImportTimetable from '@/pages/import';
 import PrintView from '@/pages/print';
 import Reports from '@/pages/reports';
@@ -33,6 +34,10 @@ function Router() {
         {() => <ProtectedRoute component={PrintView} />}
       </Route>
       
+      <Route path="/absent-teacher">
+        {() => <ProtectedRoute component={AbsentTeacher} />}
+      </Route>
+
       <Route path="/reports">
         {() => <ProtectedRoute component={Reports} />}
       </Route>
