@@ -1,18 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { format, parseISO, getDay } from "date-fns";
-import { useTeachers, useTeacherSchedule, useFreeTeachers, TimetableSlot } from "@/hooks/use-timetable";
+import { useTeachers, useTeacherSchedule, useFreeTeachers } from "@/hooks/use-timetable";
 import { useSubstitutionsByDate, useAddSubstitution, useDeleteSubstitution, Substitution } from "@/hooks/use-substitutions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Loader2, UserX, CheckCircle2, Plus, AlertTriangle, X, Printer } from "lucide-react";
+import { Trash2, Loader2, UserX, CheckCircle2, Plus, AlertTriangle, X, Printer, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DIARY_PERIOD = 9;
 
 export default function AbsentTeacher() {
   const [dateStr, setDateStr] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -30,13 +31,10 @@ export default function AbsentTeacher() {
   const { data: teachers = [], isLoading: teachersLoading } = useTeachers();
   const { data: substitutions = [], isLoading: subsLoading } = useSubstitutionsByDate(dateStr);
 
-  // Teachers already in the absent list or with no teaching on this day are excluded from the add dropdown
   const availableToAdd = teachers.filter(t => !absentTeachers.includes(t));
 
   const handleAddTeacher = () => {
     if (!selectingTeacher) return;
-
-    // Check if this teacher is already assigned as a substitute today
     const alreadySubstituting = substitutions.some(s => s.teacherName === selectingTeacher);
     if (alreadySubstituting) {
       const periods = substitutions
@@ -49,7 +47,6 @@ export default function AbsentTeacher() {
     } else {
       setWarning(null);
     }
-
     setAbsentTeachers(prev => [...prev, selectingTeacher]);
     setSelectingTeacher("");
   };
@@ -59,7 +56,6 @@ export default function AbsentTeacher() {
     if (absentTeachers.length === 1) setWarning(null);
   };
 
-  // When date changes, reset the list
   const handleDateChange = (newDate: string) => {
     setDateStr(newDate);
     setAbsentTeachers([]);
@@ -77,7 +73,7 @@ export default function AbsentTeacher() {
             <div>
               <h1 className="text-3xl font-serif font-bold text-foreground">Absent Teacher</h1>
               <p className="text-muted-foreground mt-1 text-sm">
-                Add all absent teachers for the day and assign substitutes for their periods
+                Add absent teachers, select which periods they are unavailable, then assign substitutes
               </p>
             </div>
             <Button
@@ -140,7 +136,7 @@ export default function AbsentTeacher() {
             </div>
           </div>
 
-          {/* Absent teachers chips */}
+          {/* Absent teacher chips */}
           {absentTeachers.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {absentTeachers.map(name => (
@@ -174,7 +170,7 @@ export default function AbsentTeacher() {
             <div>
               <p className="font-semibold">Conflict Warning</p>
               <p className="mt-0.5">{warning}</p>
-              <p className="mt-1 text-xs text-amber-600">You can still proceed, but review the substitution assignments carefully.</p>
+              <p className="mt-1 text-xs text-amber-600">You can still proceed, but review the assignments carefully.</p>
             </div>
             <button onClick={() => setWarning(null)} className="ml-auto shrink-0">
               <X className="w-4 h-4" />
@@ -208,6 +204,7 @@ export default function AbsentTeacher() {
             substitutions={substitutions}
             index={idx + 1}
             total={absentTeachers.length}
+            allTeachers={teachers}
           />
         ))}
       </div>
@@ -225,14 +222,41 @@ interface TeacherSectionProps {
   substitutions: Substitution[];
   index: number;
   total: number;
+  allTeachers: string[];
 }
 
-function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutions, index, total }: TeacherSectionProps) {
+function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutions, index, total, allTeachers }: TeacherSectionProps) {
+  const maxPeriods = isSaturday ? 4 : 8;
+  const periodNumbers = Array.from({ length: maxPeriods }, (_, i) => i + 1);
+
   const { data: schedule = [], isLoading: scheduleLoading } = useTeacherSchedule(teacherName, dayName);
-  const filteredSchedule = isSaturday ? schedule.filter(s => s.period <= 4) : schedule;
+
+  // selectedPeriods: numbers checked by the principal
+  const [selectedPeriods, setSelectedPeriods] = useState<number[]>([]);
+  const [initialised, setInitialised] = useState(false);
+
+  // Auto-select the teacher's timetable periods once loaded
+  useEffect(() => {
+    if (!scheduleLoading && !initialised) {
+      const teachingPeriods = schedule
+        .filter(s => s.period <= maxPeriods)
+        .map(s => s.period);
+      setSelectedPeriods(teachingPeriods);
+      setInitialised(true);
+    }
+  }, [scheduleLoading, schedule, maxPeriods, initialised]);
+
+  const togglePeriod = (p: number) => {
+    setSelectedPeriods(prev =>
+      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p].sort((a, b) => a - b)
+    );
+  };
+
+  const selectAll = () => setSelectedPeriods([...periodNumbers]);
+  const clearAll = () => setSelectedPeriods([]);
 
   return (
-    <div className="space-y-3" data-testid={`section-teacher-${teacherName}`}>
+    <div className="space-y-4" data-testid={`section-teacher-${teacherName}`}>
       {/* Section header */}
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
@@ -243,59 +267,136 @@ function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutio
         {total > 1 && <div className="flex-1 border-t border-dashed border-border" />}
       </div>
 
-      {scheduleLoading ? (
-        <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading schedule…
+      {/* Period selector */}
+      <div className="bg-muted/30 border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-foreground">
+            Select periods {teacherName} is unavailable:
+          </p>
+          {scheduleLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={selectAll}
+                className="text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+              >
+                All
+              </button>
+              <span className="text-xs text-muted-foreground">·</span>
+              <button
+                onClick={clearAll}
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                None
+              </button>
+            </div>
+          )}
         </div>
-      ) : filteredSchedule.length === 0 ? (
-        <div className="bg-muted/30 border rounded-xl p-6 text-center text-muted-foreground text-sm">
-          <CheckCircle2 className="w-7 h-7 mx-auto mb-2 opacity-30" />
-          <p>{teacherName} has no teaching periods on {dayName}.</p>
-          <p className="mt-1 text-xs">No substitutions needed.</p>
+
+        <div className="flex flex-wrap gap-2">
+          {periodNumbers.map(p => {
+            const hasTimetable = schedule.some(s => s.period === p);
+            const isSelected = selectedPeriods.includes(p);
+            return (
+              <button
+                key={p}
+                onClick={() => togglePeriod(p)}
+                data-testid={`toggle-period-${p}-${teacherName}`}
+                className={[
+                  "w-11 h-11 rounded-lg border-2 text-sm font-bold transition-all",
+                  isSelected
+                    ? "bg-primary border-primary text-primary-foreground shadow-sm"
+                    : hasTimetable
+                    ? "bg-background border-primary/40 text-primary hover:border-primary"
+                    : "bg-background border-border text-muted-foreground hover:border-foreground",
+                ].join(" ")}
+              >
+                {p}
+              </button>
+            );
+          })}
         </div>
-      ) : (
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-primary inline-block" /> Selected (absent)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded border-2 border-primary/40 inline-block" /> Has class (from timetable)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded border-2 border-border inline-block" /> Free / no class
+          </span>
+        </div>
+      </div>
+
+      {/* No periods selected */}
+      {selectedPeriods.length === 0 && initialised && (
+        <div className="bg-muted/20 border rounded-xl p-5 text-center text-muted-foreground text-sm">
+          <CheckCircle2 className="w-6 h-6 mx-auto mb-2 opacity-30" />
+          No periods selected. Toggle the periods above where {teacherName} needs a substitute.
+        </div>
+      )}
+
+      {/* Slot cards for selected periods */}
+      {selectedPeriods.length > 0 && (
         <div className="space-y-3 pl-10">
-          {filteredSchedule.map((slot) => (
-            <SlotCard
-              key={slot.id}
-              slot={slot}
-              dayName={dayName}
-              dateStr={dateStr}
-              substitutions={substitutions}
-            />
-          ))}
+          {selectedPeriods.map((p) => {
+            const slot = schedule.find(s => s.period === p);
+            return (
+              <SlotCard
+                key={p}
+                period={p}
+                classInfo={slot?.slotValue ?? ""}
+                dayName={dayName}
+                dateStr={dateStr}
+                substitutions={substitutions}
+              />
+            );
+          })}
+
+          {/* Diary period — always appended */}
+          <DiaryCard
+            dateStr={dateStr}
+            dayName={dayName}
+            substitutions={substitutions}
+            allTeachers={allTeachers}
+          />
         </div>
       )}
     </div>
   );
 }
 
-// ─── Per-slot card ────────────────────────────────────────────────────────────
+// ─── Slot card (regular period) ───────────────────────────────────────────────
 
 interface SlotCardProps {
-  slot: TimetableSlot;
+  period: number;
+  classInfo: string;
   dayName: string;
   dateStr: string;
   substitutions: Substitution[];
 }
 
-function SlotCard({ slot, dayName, dateStr, substitutions }: SlotCardProps) {
+function SlotCard({ period, classInfo, dayName, dateStr, substitutions }: SlotCardProps) {
   const [selectedTeacher, setSelectedTeacher] = useState("");
   const { toast } = useToast();
 
   const addMutation = useAddSubstitution();
   const deleteMutation = useDeleteSubstitution();
 
-  const { data: freeTeachers = [], isLoading: freeLoading } = useFreeTeachers(dayName, slot.period);
+  const { data: freeTeachers = [], isLoading: freeLoading } = useFreeTeachers(dayName, period);
 
-  // Substitutions already saved for this period + class
+  // Saved substitutions for this exact period + class
   const assignedHere = substitutions.filter(
-    s => s.period === slot.period && s.class === slot.slotValue
+    s => s.period === period && s.class === (classInfo || `Period ${period}`)
   );
 
-  // All teachers already used this period (any class) — prevent double-booking
+  // Prevent double-booking any teacher in this period
   const usedThisPeriod = substitutions
-    .filter(s => s.period === slot.period)
+    .filter(s => s.period === period)
     .map(s => s.teacherName);
 
   const availableTeachers = freeTeachers.filter(t => !usedThisPeriod.includes(t.teacherName));
@@ -306,12 +407,12 @@ function SlotCard({ slot, dayName, dateStr, substitutions }: SlotCardProps) {
       await addMutation.mutateAsync({
         date: dateStr,
         day: dayName,
-        period: slot.period,
-        class: slot.slotValue,
+        period,
+        class: classInfo || `Period ${period}`,
         teacherName: selectedTeacher,
       });
       setSelectedTeacher("");
-      toast({ title: "Assigned", description: `${selectedTeacher} → Period ${slot.period} (${slot.slotValue})` });
+      toast({ title: "Assigned", description: `${selectedTeacher} → Period ${period}${classInfo ? ` (${classInfo})` : ""}` });
     } catch {
       toast({ title: "Error", description: "Failed to assign substitution", variant: "destructive" });
     }
@@ -327,15 +428,21 @@ function SlotCard({ slot, dayName, dateStr, substitutions }: SlotCardProps) {
   };
 
   return (
-    <Card className="border shadow-sm" data-testid={`card-slot-${slot.period}-${slot.slotValue}`}>
+    <Card className="border shadow-sm" data-testid={`card-slot-${period}`}>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <span className="text-4xl font-serif font-bold text-primary">{slot.period}</span>
+            <span className="text-4xl font-serif font-bold text-primary">{period}</span>
             <div>
               <p className="text-xs text-muted-foreground font-normal uppercase tracking-wide">Period</p>
-              <p className="text-lg font-semibold text-foreground">{slot.slotValue}</p>
-              <p className="text-xs text-muted-foreground font-normal">Class to be covered</p>
+              {classInfo ? (
+                <>
+                  <p className="text-lg font-semibold text-foreground">{classInfo}</p>
+                  <p className="text-xs text-muted-foreground font-normal">Class to be covered</p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground font-normal italic">No class in timetable</p>
+              )}
             </div>
           </div>
           {assignedHere.length > 0 && (
@@ -375,7 +482,7 @@ function SlotCard({ slot, dayName, dateStr, substitutions }: SlotCardProps) {
           ) : (
             <>
               <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
-                <SelectTrigger className="flex-1 bg-background text-sm" data-testid={`trigger-sub-p${slot.period}`}>
+                <SelectTrigger className="flex-1 bg-background text-sm" data-testid={`trigger-sub-p${period}`}>
                   <SelectValue placeholder={availableTeachers.length === 0 ? "No free teachers" : "Select substitute…"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -390,12 +497,126 @@ function SlotCard({ slot, dayName, dateStr, substitutions }: SlotCardProps) {
                 size="sm"
                 onClick={handleAssign}
                 disabled={!selectedTeacher || addMutation.isPending}
-                data-testid={`button-assign-p${slot.period}`}
+                data-testid={`button-assign-p${period}`}
               >
                 {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Assign"}
               </Button>
             </>
           )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Diary period card ────────────────────────────────────────────────────────
+
+interface DiaryCardProps {
+  dateStr: string;
+  dayName: string;
+  substitutions: Substitution[];
+  allTeachers: string[];
+}
+
+function DiaryCard({ dateStr, dayName, substitutions, allTeachers }: DiaryCardProps) {
+  const [selectedTeacher, setSelectedTeacher] = useState("");
+  const { toast } = useToast();
+
+  const addMutation = useAddSubstitution();
+  const deleteMutation = useDeleteSubstitution();
+
+  // Diary uses period = 9 in Firestore
+  const assignedHere = substitutions.filter(s => s.period === DIARY_PERIOD && s.class === "Diary");
+  const usedDiary = assignedHere.map(s => s.teacherName);
+  const availableTeachers = allTeachers.filter(t => !usedDiary.includes(t));
+
+  const handleAssign = async () => {
+    if (!selectedTeacher) return;
+    try {
+      await addMutation.mutateAsync({
+        date: dateStr,
+        day: dayName,
+        period: DIARY_PERIOD,
+        class: "Diary",
+        teacherName: selectedTeacher,
+      });
+      setSelectedTeacher("");
+      toast({ title: "Assigned", description: `${selectedTeacher} → Diary Period` });
+    } catch {
+      toast({ title: "Error", description: "Failed to assign", variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (sub: Substitution) => {
+    try {
+      await deleteMutation.mutateAsync({ id: sub.id, date: sub.date });
+      toast({ title: "Removed", description: "Diary assignment removed" });
+    } catch {
+      toast({ title: "Error", description: "Failed to remove", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Card className="border border-dashed border-primary/40 shadow-sm bg-primary/[0.02]" data-testid="card-diary">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <BookOpen className="w-8 h-8 text-primary/60" />
+            <div>
+              <p className="text-lg font-semibold text-foreground">Diary Period</p>
+              <p className="text-xs text-muted-foreground font-normal">10 minutes · Auto-added</p>
+            </div>
+          </div>
+          {assignedHere.length > 0 && (
+            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+              {assignedHere.length} assigned
+            </span>
+          )}
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent className="space-y-3">
+        {assignedHere.map((sub) => (
+          <div
+            key={sub.id}
+            className="flex items-center justify-between bg-green-50 border border-green-200 rounded-md px-3 py-2 text-sm"
+            data-testid={`row-diary-sub-${sub.id}`}
+          >
+            <span className="font-medium text-green-800">{sub.teacherName}</span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+              onClick={() => handleDelete(sub)}
+              disabled={deleteMutation.isPending}
+              data-testid={`button-delete-diary-${sub.id}`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        ))}
+
+        <div className="flex gap-2 items-center">
+          <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+            <SelectTrigger className="flex-1 bg-background text-sm" data-testid="trigger-diary">
+              <SelectValue placeholder="Select diary supervisor…" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableTeachers.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            onClick={handleAssign}
+            disabled={!selectedTeacher || addMutation.isPending}
+            data-testid="button-assign-diary"
+          >
+            {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Assign"}
+          </Button>
         </div>
       </CardContent>
     </Card>
