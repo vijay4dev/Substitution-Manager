@@ -8,15 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Loader2, UserX, CheckCircle2 } from "lucide-react";
+import { Trash2, Loader2, UserX, CheckCircle2, Plus, AlertTriangle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function AbsentTeacher() {
   const [dateStr, setDateStr] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [absentTeacher, setAbsentTeacher] = useState("");
-  const { toast } = useToast();
+  const [absentTeachers, setAbsentTeachers] = useState<string[]>([]);
+  const [selectingTeacher, setSelectingTeacher] = useState("");
+  const [warning, setWarning] = useState<string | null>(null);
 
   const selectedDate = parseISO(dateStr);
   const dayIndex = getDay(selectedDate);
@@ -25,68 +26,148 @@ export default function AbsentTeacher() {
   const isSaturday = dayIndex === 6;
 
   const { data: teachers = [], isLoading: teachersLoading } = useTeachers();
-  const { data: schedule = [], isLoading: scheduleLoading } = useTeacherSchedule(absentTeacher, dayName);
   const { data: substitutions = [], isLoading: subsLoading } = useSubstitutionsByDate(dateStr);
 
-  // Only show periods 1–4 on Saturday
-  const filteredSchedule = isSaturday ? schedule.filter(s => s.period <= 4) : schedule;
+  // Teachers already in the absent list or with no teaching on this day are excluded from the add dropdown
+  const availableToAdd = teachers.filter(t => !absentTeachers.includes(t));
+
+  const handleAddTeacher = () => {
+    if (!selectingTeacher) return;
+
+    // Check if this teacher is already assigned as a substitute today
+    const alreadySubstituting = substitutions.some(s => s.teacherName === selectingTeacher);
+    if (alreadySubstituting) {
+      const periods = substitutions
+        .filter(s => s.teacherName === selectingTeacher)
+        .map(s => `Period ${s.period}`)
+        .join(", ");
+      setWarning(
+        `${selectingTeacher} is already assigned as a substitute today (${periods}). Adding them as absent may cause a conflict.`
+      );
+    } else {
+      setWarning(null);
+    }
+
+    setAbsentTeachers(prev => [...prev, selectingTeacher]);
+    setSelectingTeacher("");
+  };
+
+  const handleRemoveTeacher = (name: string) => {
+    setAbsentTeachers(prev => prev.filter(t => t !== name));
+    if (absentTeachers.length === 1) setWarning(null);
+  };
+
+  // When date changes, reset the list
+  const handleDateChange = (newDate: string) => {
+    setDateStr(newDate);
+    setAbsentTeachers([]);
+    setSelectingTeacher("");
+    setWarning(null);
+  };
 
   return (
     <Layout>
       <div className="p-8 max-w-4xl mx-auto space-y-6">
-        {/* Header */}
+
+        {/* Header card */}
         <div className="bg-card p-6 rounded-xl border shadow-sm space-y-4">
           <div>
             <h1 className="text-3xl font-serif font-bold text-foreground">Absent Teacher</h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Select an absent teacher to see their schedule and assign substitutes
+              Add all absent teachers for the day and assign substitutes for their periods
             </p>
           </div>
 
+          {/* Date + Add teacher row */}
           <div className="flex flex-col sm:flex-row gap-4">
-            {/* Date picker */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Label htmlFor="date-picker" className="text-muted-foreground shrink-0">Date:</Label>
               <Input
                 id="date-picker"
                 type="date"
                 value={dateStr}
-                onChange={(e) => setDateStr(e.target.value)}
+                onChange={(e) => handleDateChange(e.target.value)}
                 className="w-auto bg-background"
                 data-testid="input-date-absent"
               />
             </div>
 
-            {/* Teacher dropdown */}
             <div className="flex items-center gap-2 flex-1">
-              <Label className="text-muted-foreground shrink-0">Absent Teacher:</Label>
-              {teachersLoading ? (
+              <Label className="text-muted-foreground shrink-0">Add Absent:</Label>
+              {teachersLoading || subsLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
               ) : (
-                <Select value={absentTeacher} onValueChange={setAbsentTeacher} data-testid="select-absent-teacher">
-                  <SelectTrigger className="flex-1 bg-background" data-testid="trigger-absent-teacher">
-                    <SelectValue placeholder="Select a teacher..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teachers.map((name) => (
-                      <SelectItem key={name} value={name} data-testid={`option-teacher-${name}`}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <>
+                  <Select
+                    value={selectingTeacher}
+                    onValueChange={setSelectingTeacher}
+                    disabled={isSunday}
+                  >
+                    <SelectTrigger className="flex-1 bg-background" data-testid="trigger-add-absent">
+                      <SelectValue placeholder="Select a teacher…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableToAdd.map((name) => (
+                        <SelectItem key={name} value={name} data-testid={`option-absent-${name}`}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={handleAddTeacher}
+                    disabled={!selectingTeacher || isSunday}
+                    data-testid="button-add-absent"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add
+                  </Button>
+                </>
               )}
             </div>
           </div>
 
-          {absentTeacher && (
-            <p className="text-sm font-medium text-foreground">
-              Showing schedule for <span className="text-primary">{absentTeacher}</span> on{" "}
-              <span className="text-primary">{dayName}, {format(selectedDate, "dd MMM yyyy")}</span>
-              {isSaturday && <span className="ml-2 text-amber-600 text-xs">(Half day — Periods 1–4 only)</span>}
-            </p>
+          {/* Absent teachers chips */}
+          {absentTeachers.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {absentTeachers.map(name => (
+                <span
+                  key={name}
+                  className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-800 text-sm font-medium px-3 py-1 rounded-full"
+                  data-testid={`chip-absent-${name}`}
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  {name}
+                  <button
+                    onClick={() => handleRemoveTeacher(name)}
+                    className="ml-1 hover:text-red-900"
+                    data-testid={`button-remove-absent-${name}`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              ))}
+              <span className="text-xs text-muted-foreground self-center">
+                {absentTeachers.length} absent · {dayName}{isSaturday ? " (Half day)" : ""}
+              </span>
+            </div>
           )}
         </div>
+
+        {/* Conflict warning */}
+        {warning && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm" data-testid="warning-conflict">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Conflict Warning</p>
+              <p className="mt-0.5">{warning}</p>
+              <p className="mt-1 text-xs text-amber-600">You can still proceed, but review the substitution assignments carefully.</p>
+            </div>
+            <button onClick={() => setWarning(null)} className="ml-auto shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Sunday warning */}
         {isSunday && (
@@ -95,59 +176,97 @@ export default function AbsentTeacher() {
           </div>
         )}
 
-        {/* No teacher selected */}
-        {!isSunday && !absentTeacher && (
+        {/* Empty state */}
+        {!isSunday && absentTeachers.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
             <UserX className="w-10 h-10 opacity-30" />
-            <p className="text-sm">Select an absent teacher above to view their schedule</p>
+            <p className="text-sm">Add one or more absent teachers above to begin</p>
           </div>
         )}
 
-        {/* Schedule loading */}
-        {!isSunday && absentTeacher && (scheduleLoading || subsLoading) && (
-          <div className="flex justify-center p-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        )}
-
-        {/* No periods on that day */}
-        {!isSunday && absentTeacher && !scheduleLoading && !subsLoading && filteredSchedule.length === 0 && (
-          <div className="bg-muted/40 border rounded-xl p-8 text-center text-muted-foreground text-sm">
-            <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p>{absentTeacher} has no teaching periods on {dayName}.</p>
-            <p className="mt-1 text-xs">No substitutions needed.</p>
-          </div>
-        )}
-
-        {/* Schedule cards */}
-        {!isSunday && absentTeacher && !scheduleLoading && !subsLoading && filteredSchedule.length > 0 && (
-          <div className="space-y-4">
-            {filteredSchedule.map((slot) => (
-              <SlotCard
-                key={slot.id}
-                slot={slot}
-                dayName={dayName}
-                dateStr={dateStr}
-                existingSubstitutions={substitutions}
-                allSubstitutionsForDate={substitutions}
-              />
-            ))}
-          </div>
-        )}
+        {/* One section per absent teacher */}
+        {!isSunday && absentTeachers.map((teacherName, idx) => (
+          <TeacherSection
+            key={teacherName}
+            teacherName={teacherName}
+            dayName={dayName}
+            dateStr={dateStr}
+            isSaturday={isSaturday}
+            substitutions={substitutions}
+            index={idx + 1}
+            total={absentTeachers.length}
+          />
+        ))}
       </div>
     </Layout>
   );
 }
 
+// ─── Per-teacher section ──────────────────────────────────────────────────────
+
+interface TeacherSectionProps {
+  teacherName: string;
+  dayName: string;
+  dateStr: string;
+  isSaturday: boolean;
+  substitutions: Substitution[];
+  index: number;
+  total: number;
+}
+
+function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutions, index, total }: TeacherSectionProps) {
+  const { data: schedule = [], isLoading: scheduleLoading } = useTeacherSchedule(teacherName, dayName);
+  const filteredSchedule = isSaturday ? schedule.filter(s => s.period <= 4) : schedule;
+
+  return (
+    <div className="space-y-3" data-testid={`section-teacher-${teacherName}`}>
+      {/* Section header */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
+          {index}
+        </div>
+        <h2 className="text-lg font-serif font-semibold text-foreground">{teacherName}</h2>
+        <span className="text-xs text-muted-foreground">{dayName}{isSaturday ? " · Periods 1–4 only" : ""}</span>
+        {total > 1 && <div className="flex-1 border-t border-dashed border-border" />}
+      </div>
+
+      {scheduleLoading ? (
+        <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading schedule…
+        </div>
+      ) : filteredSchedule.length === 0 ? (
+        <div className="bg-muted/30 border rounded-xl p-6 text-center text-muted-foreground text-sm">
+          <CheckCircle2 className="w-7 h-7 mx-auto mb-2 opacity-30" />
+          <p>{teacherName} has no teaching periods on {dayName}.</p>
+          <p className="mt-1 text-xs">No substitutions needed.</p>
+        </div>
+      ) : (
+        <div className="space-y-3 pl-10">
+          {filteredSchedule.map((slot) => (
+            <SlotCard
+              key={slot.id}
+              slot={slot}
+              dayName={dayName}
+              dateStr={dateStr}
+              substitutions={substitutions}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Per-slot card ────────────────────────────────────────────────────────────
+
 interface SlotCardProps {
   slot: TimetableSlot;
   dayName: string;
   dateStr: string;
-  existingSubstitutions: Substitution[];
-  allSubstitutionsForDate: Substitution[];
+  substitutions: Substitution[];
 }
 
-function SlotCard({ slot, dayName, dateStr, existingSubstitutions, allSubstitutionsForDate }: SlotCardProps) {
+function SlotCard({ slot, dayName, dateStr, substitutions }: SlotCardProps) {
   const [selectedTeacher, setSelectedTeacher] = useState("");
   const { toast } = useToast();
 
@@ -156,18 +275,17 @@ function SlotCard({ slot, dayName, dateStr, existingSubstitutions, allSubstituti
 
   const { data: freeTeachers = [], isLoading: freeLoading } = useFreeTeachers(dayName, slot.period);
 
-  // Already assigned substitutions for this date+period
-  const assignedHere = existingSubstitutions.filter(
+  // Substitutions already saved for this period + class
+  const assignedHere = substitutions.filter(
     s => s.period === slot.period && s.class === slot.slotValue
   );
 
-  // Teachers already used in this period (any class) — cannot double-book
-  const usedTeacherNames = allSubstitutionsForDate
+  // All teachers already used this period (any class) — prevent double-booking
+  const usedThisPeriod = substitutions
     .filter(s => s.period === slot.period)
     .map(s => s.teacherName);
 
-  // Available = free teachers minus those already used this period
-  const availableTeachers = freeTeachers.filter(t => !usedTeacherNames.includes(t.teacherName));
+  const availableTeachers = freeTeachers.filter(t => !usedThisPeriod.includes(t.teacherName));
 
   const handleAssign = async () => {
     if (!selectedTeacher) return;
@@ -180,7 +298,7 @@ function SlotCard({ slot, dayName, dateStr, existingSubstitutions, allSubstituti
         teacherName: selectedTeacher,
       });
       setSelectedTeacher("");
-      toast({ title: "Substitution assigned", description: `${selectedTeacher} assigned for Period ${slot.period}` });
+      toast({ title: "Assigned", description: `${selectedTeacher} → Period ${slot.period} (${slot.slotValue})` });
     } catch {
       toast({ title: "Error", description: "Failed to assign substitution", variant: "destructive" });
     }
@@ -191,12 +309,12 @@ function SlotCard({ slot, dayName, dateStr, existingSubstitutions, allSubstituti
       await deleteMutation.mutateAsync({ id: sub.id, date: sub.date });
       toast({ title: "Removed", description: "Substitution removed" });
     } catch {
-      toast({ title: "Error", description: "Failed to remove substitution", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to remove", variant: "destructive" });
     }
   };
 
   return (
-    <Card className="border shadow-sm" data-testid={`card-period-${slot.period}`}>
+    <Card className="border shadow-sm" data-testid={`card-slot-${slot.period}-${slot.slotValue}`}>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -216,7 +334,6 @@ function SlotCard({ slot, dayName, dateStr, existingSubstitutions, allSubstituti
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Assigned substitutions */}
         {assignedHere.map((sub) => (
           <div
             key={sub.id}
@@ -237,21 +354,20 @@ function SlotCard({ slot, dayName, dateStr, existingSubstitutions, allSubstituti
           </div>
         ))}
 
-        {/* Assign row */}
         <div className="flex gap-2 items-center">
           {freeLoading ? (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="w-3 h-3 animate-spin" /> Loading free teachers…
-            </div>
+            </span>
           ) : (
             <>
-              <Select value={selectedTeacher} onValueChange={setSelectedTeacher} data-testid={`select-sub-p${slot.period}`}>
+              <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
                 <SelectTrigger className="flex-1 bg-background text-sm" data-testid={`trigger-sub-p${slot.period}`}>
                   <SelectValue placeholder={availableTeachers.length === 0 ? "No free teachers" : "Select substitute…"} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableTeachers.map((t) => (
-                    <SelectItem key={t.id} value={t.teacherName} data-testid={`option-sub-${t.teacherName}-p${slot.period}`}>
+                    <SelectItem key={t.id} value={t.teacherName}>
                       {t.teacherName}
                     </SelectItem>
                   ))}
