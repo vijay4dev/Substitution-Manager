@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Loader2, UserX, CheckCircle2, Plus, AlertTriangle, X } from "lucide-react";
+import { Trash2, Loader2, UserX, CheckCircle2, Plus, AlertTriangle, X, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -18,6 +19,7 @@ export default function AbsentTeacher() {
   const [absentTeachers, setAbsentTeachers] = useState<string[]>([]);
   const [selectingTeacher, setSelectingTeacher] = useState("");
   const [warning, setWarning] = useState<string | null>(null);
+  const [, setLocation] = useLocation();
 
   const selectedDate = parseISO(dateStr);
   const dayIndex = getDay(selectedDate);
@@ -71,11 +73,22 @@ export default function AbsentTeacher() {
 
         {/* Header card */}
         <div className="bg-card p-6 rounded-xl border shadow-sm space-y-4">
-          <div>
-            <h1 className="text-3xl font-serif font-bold text-foreground">Absent Teacher</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Add all absent teachers for the day and assign substitutes for their periods
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-serif font-bold text-foreground">Absent Teacher</h1>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Add all absent teachers for the day and assign substitutes for their periods
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setLocation(`/print?date=${dateStr}`)}
+              disabled={substitutions.length === 0}
+              data-testid="button-print-absent"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print
+            </Button>
           </div>
 
           {/* Date + Add teacher row */}
