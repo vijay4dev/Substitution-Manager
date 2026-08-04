@@ -231,38 +231,25 @@ function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutio
 
   const { data: schedule = [], isLoading: scheduleLoading } = useTeacherSchedule(teacherName, dayName);
 
-  const [fromPeriod, setFromPeriod] = useState<number>(1);
-  const [toPeriod, setToPeriod] = useState<number>(maxPeriods);
+  const [selectedPeriods, setSelectedPeriods] = useState<number[]>([]);
   const [initialised, setInitialised] = useState(false);
 
-  // Auto-set range from the teacher's timetable once loaded
+  // Auto-check periods from the teacher's timetable once loaded
   useEffect(() => {
     if (!scheduleLoading && !initialised) {
       const periods = schedule
         .filter(s => s.period <= maxPeriods)
         .map(s => s.period);
-      if (periods.length > 0) {
-        setFromPeriod(Math.min(...periods));
-        setToPeriod(Math.max(...periods));
-      }
+      setSelectedPeriods(periods);
       setInitialised(true);
     }
   }, [scheduleLoading, schedule, maxPeriods, initialised]);
 
-  // Clamp: "to" can't be less than "from"
-  const handleFromChange = (val: number) => {
-    setFromPeriod(val);
-    if (val > toPeriod) setToPeriod(val);
+  const togglePeriod = (p: number) => {
+    setSelectedPeriods(prev =>
+      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p].sort((a, b) => a - b)
+    );
   };
-  const handleToChange = (val: number) => {
-    setToPeriod(val);
-    if (val < fromPeriod) setFromPeriod(val);
-  };
-
-  const selectedPeriods = Array.from(
-    { length: toPeriod - fromPeriod + 1 },
-    (_, i) => fromPeriod + i
-  );
 
   return (
     <div className="space-y-4" data-testid={`section-teacher-${teacherName}`}>
@@ -276,50 +263,48 @@ function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutio
         {total > 1 && <div className="flex-1 border-t border-dashed border-border" />}
       </div>
 
-      {/* Range selector */}
-      <div className="bg-muted/30 border rounded-xl p-4">
-        <p className="text-sm font-medium text-foreground mb-3">
-          Absent for periods:
-        </p>
-        {scheduleLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading timetable…
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Label className="text-muted-foreground text-sm shrink-0">From</Label>
-              <Select value={String(fromPeriod)} onValueChange={v => handleFromChange(Number(v))}>
-                <SelectTrigger className="w-24 bg-background" data-testid={`select-from-${teacherName}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {periodOptions.map(p => (
-                    <SelectItem key={p} value={String(p)}>Period {p}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {/* Period checkboxes */}
+      <div className="bg-muted/30 border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-foreground">Which periods is {teacherName} absent for?</p>
+          {scheduleLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          ) : (
+            <div className="flex gap-3 text-xs">
+              <button onClick={() => setSelectedPeriods([...periodOptions])} className="text-primary underline underline-offset-2">All</button>
+              <button onClick={() => setSelectedPeriods([])} className="text-muted-foreground underline underline-offset-2">None</button>
             </div>
-
-            <div className="flex items-center gap-2">
-              <Label className="text-muted-foreground text-sm shrink-0">To</Label>
-              <Select value={String(toPeriod)} onValueChange={v => handleToChange(Number(v))}>
-                <SelectTrigger className="w-24 bg-background" data-testid={`select-to-${teacherName}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {periodOptions.map(p => (
-                    <SelectItem key={p} value={String(p)}>Period {p}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <span className="text-sm text-muted-foreground">
-              → Periods {fromPeriod}{fromPeriod === toPeriod ? "" : `–${toPeriod}`}
-              <span className="ml-1 text-xs">({selectedPeriods.length} period{selectedPeriods.length !== 1 ? "s" : ""})</span>
-            </span>
-          </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {periodOptions.map(p => {
+            const checked = selectedPeriods.includes(p);
+            return (
+              <label
+                key={p}
+                className={[
+                  "flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer select-none transition-colors text-sm font-medium",
+                  checked
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background border-border text-foreground hover:border-primary/50",
+                ].join(" ")}
+                data-testid={`checkbox-period-${p}-${teacherName}`}
+              >
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={checked}
+                  onChange={() => togglePeriod(p)}
+                />
+                Period {p}
+              </label>
+            );
+          })}
+        </div>
+        {selectedPeriods.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {selectedPeriods.length} period{selectedPeriods.length !== 1 ? "s" : ""} selected: {selectedPeriods.join(", ")}
+          </p>
         )}
       </div>
 
