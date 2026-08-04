@@ -231,25 +231,39 @@ function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutio
 
   const { data: schedule = [], isLoading: scheduleLoading } = useTeacherSchedule(teacherName, dayName);
 
-  const [selectedPeriods, setSelectedPeriods] = useState<number[]>([]);
+  const [inputText, setInputText] = useState("");
   const [initialised, setInitialised] = useState(false);
 
-  // Auto-check periods from the teacher's timetable once loaded
+  // Auto-populate input from timetable once loaded
   useEffect(() => {
     if (!scheduleLoading && !initialised) {
       const periods = schedule
         .filter(s => s.period <= maxPeriods)
-        .map(s => s.period);
-      setSelectedPeriods(periods);
+        .map(s => s.period)
+        .sort((a, b) => a - b);
+      setInputText(periods.join(", "));
       setInitialised(true);
     }
   }, [scheduleLoading, schedule, maxPeriods, initialised]);
 
-  const togglePeriod = (p: number) => {
-    setSelectedPeriods(prev =>
-      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p].sort((a, b) => a - b)
-    );
-  };
+  // Parse "1,4,5" or "1-8" or "1-3,6,8" into a sorted unique array
+  const selectedPeriods = (() => {
+    const result = new Set<number>();
+    inputText.split(",").forEach(part => {
+      const trimmed = part.trim();
+      const range = trimmed.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (range) {
+        const from = parseInt(range[1]), to = parseInt(range[2]);
+        for (let p = Math.min(from, to); p <= Math.max(from, to); p++) {
+          if (p >= 1 && p <= maxPeriods) result.add(p);
+        }
+      } else {
+        const n = parseInt(trimmed);
+        if (!isNaN(n) && n >= 1 && n <= maxPeriods) result.add(n);
+      }
+    });
+    return [...result].sort((a, b) => a - b);
+  })();
 
   return (
     <div className="space-y-4" data-testid={`section-teacher-${teacherName}`}>
@@ -263,48 +277,52 @@ function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutio
         {total > 1 && <div className="flex-1 border-t border-dashed border-border" />}
       </div>
 
-      {/* Period checkboxes */}
-      <div className="bg-muted/30 border rounded-xl p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-foreground">Which periods is {teacherName} absent for?</p>
-          {scheduleLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-          ) : (
-            <div className="flex gap-3 text-xs">
-              <button onClick={() => setSelectedPeriods([...periodOptions])} className="text-primary underline underline-offset-2">All</button>
-              <button onClick={() => setSelectedPeriods([])} className="text-muted-foreground underline underline-offset-2">None</button>
-            </div>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {periodOptions.map(p => {
-            const checked = selectedPeriods.includes(p);
-            return (
-              <label
-                key={p}
-                className={[
-                  "flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer select-none transition-colors text-sm font-medium",
-                  checked
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background border-border text-foreground hover:border-primary/50",
-                ].join(" ")}
-                data-testid={`checkbox-period-${p}-${teacherName}`}
+      {/* Period text input */}
+      <div className="bg-muted/30 border rounded-xl p-4 space-y-2">
+        <Label className="text-sm font-medium text-foreground">
+          Absent for periods:
+        </Label>
+        {scheduleLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading timetable…
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <Input
+                value={inputText}
+                onChange={e => setInputText(e.target.value)}
+                placeholder={`e.g. 1,4,5  or  1-8  or  1-3,6`}
+                className="bg-background font-mono"
+                data-testid={`input-periods-${teacherName}`}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setInputText(periodOptions.join(", "))}
               >
-                <input
-                  type="checkbox"
-                  className="sr-only"
-                  checked={checked}
-                  onChange={() => togglePeriod(p)}
-                />
-                Period {p}
-              </label>
-            );
-          })}
-        </div>
-        {selectedPeriods.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {selectedPeriods.length} period{selectedPeriods.length !== 1 ? "s" : ""} selected: {selectedPeriods.join(", ")}
-          </p>
+                All
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-muted-foreground"
+                onClick={() => setInputText("")}
+              >
+                Clear
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Type period numbers separated by commas. Use a dash for a range (e.g. <span className="font-mono">1-8</span>).
+            </p>
+            {selectedPeriods.length > 0 && (
+              <p className="text-xs font-medium text-foreground">
+                → Periods: {selectedPeriods.join(", ")}
+                <span className="text-muted-foreground ml-1">({selectedPeriods.length} period{selectedPeriods.length !== 1 ? "s" : ""})</span>
+              </p>
+            )}
+          </>
         )}
       </div>
 
