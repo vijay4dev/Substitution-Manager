@@ -227,33 +227,42 @@ interface TeacherSectionProps {
 
 function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutions, index, total, allTeachers }: TeacherSectionProps) {
   const maxPeriods = isSaturday ? 4 : 8;
-  const periodNumbers = Array.from({ length: maxPeriods }, (_, i) => i + 1);
+  const periodOptions = Array.from({ length: maxPeriods }, (_, i) => i + 1);
 
   const { data: schedule = [], isLoading: scheduleLoading } = useTeacherSchedule(teacherName, dayName);
 
-  // selectedPeriods: numbers checked by the principal
-  const [selectedPeriods, setSelectedPeriods] = useState<number[]>([]);
+  const [fromPeriod, setFromPeriod] = useState<number>(1);
+  const [toPeriod, setToPeriod] = useState<number>(maxPeriods);
   const [initialised, setInitialised] = useState(false);
 
-  // Auto-select the teacher's timetable periods once loaded
+  // Auto-set range from the teacher's timetable once loaded
   useEffect(() => {
     if (!scheduleLoading && !initialised) {
-      const teachingPeriods = schedule
+      const periods = schedule
         .filter(s => s.period <= maxPeriods)
         .map(s => s.period);
-      setSelectedPeriods(teachingPeriods);
+      if (periods.length > 0) {
+        setFromPeriod(Math.min(...periods));
+        setToPeriod(Math.max(...periods));
+      }
       setInitialised(true);
     }
   }, [scheduleLoading, schedule, maxPeriods, initialised]);
 
-  const togglePeriod = (p: number) => {
-    setSelectedPeriods(prev =>
-      prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p].sort((a, b) => a - b)
-    );
+  // Clamp: "to" can't be less than "from"
+  const handleFromChange = (val: number) => {
+    setFromPeriod(val);
+    if (val > toPeriod) setToPeriod(val);
+  };
+  const handleToChange = (val: number) => {
+    setToPeriod(val);
+    if (val < fromPeriod) setFromPeriod(val);
   };
 
-  const selectAll = () => setSelectedPeriods([...periodNumbers]);
-  const clearAll = () => setSelectedPeriods([]);
+  const selectedPeriods = Array.from(
+    { length: toPeriod - fromPeriod + 1 },
+    (_, i) => fromPeriod + i
+  );
 
   return (
     <div className="space-y-4" data-testid={`section-teacher-${teacherName}`}>
@@ -267,81 +276,55 @@ function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutio
         {total > 1 && <div className="flex-1 border-t border-dashed border-border" />}
       </div>
 
-      {/* Period selector */}
-      <div className="bg-muted/30 border rounded-xl p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-foreground">
-            Select periods {teacherName} is unavailable:
-          </p>
-          {scheduleLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-          ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={selectAll}
-                className="text-xs text-primary underline underline-offset-2 hover:text-primary/80"
-              >
-                All
-              </button>
-              <span className="text-xs text-muted-foreground">·</span>
-              <button
-                onClick={clearAll}
-                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-              >
-                None
-              </button>
+      {/* Range selector */}
+      <div className="bg-muted/30 border rounded-xl p-4">
+        <p className="text-sm font-medium text-foreground mb-3">
+          Absent for periods:
+        </p>
+        {scheduleLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading timetable…
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Label className="text-muted-foreground text-sm shrink-0">From</Label>
+              <Select value={String(fromPeriod)} onValueChange={v => handleFromChange(Number(v))}>
+                <SelectTrigger className="w-24 bg-background" data-testid={`select-from-${teacherName}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {periodOptions.map(p => (
+                    <SelectItem key={p} value={String(p)}>Period {p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </div>
 
-        <div className="flex flex-wrap gap-2">
-          {periodNumbers.map(p => {
-            const hasTimetable = schedule.some(s => s.period === p);
-            const isSelected = selectedPeriods.includes(p);
-            return (
-              <button
-                key={p}
-                onClick={() => togglePeriod(p)}
-                data-testid={`toggle-period-${p}-${teacherName}`}
-                className={[
-                  "w-11 h-11 rounded-lg border-2 text-sm font-bold transition-all",
-                  isSelected
-                    ? "bg-primary border-primary text-primary-foreground shadow-sm"
-                    : hasTimetable
-                    ? "bg-background border-primary/40 text-primary hover:border-primary"
-                    : "bg-background border-border text-muted-foreground hover:border-foreground",
-                ].join(" ")}
-              >
-                {p}
-              </button>
-            );
-          })}
-        </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-muted-foreground text-sm shrink-0">To</Label>
+              <Select value={String(toPeriod)} onValueChange={v => handleToChange(Number(v))}>
+                <SelectTrigger className="w-24 bg-background" data-testid={`select-to-${teacherName}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {periodOptions.map(p => (
+                    <SelectItem key={p} value={String(p)}>Period {p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-primary inline-block" /> Selected (absent)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded border-2 border-primary/40 inline-block" /> Has class (from timetable)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded border-2 border-border inline-block" /> Free / no class
-          </span>
-        </div>
+            <span className="text-sm text-muted-foreground">
+              → Periods {fromPeriod}{fromPeriod === toPeriod ? "" : `–${toPeriod}`}
+              <span className="ml-1 text-xs">({selectedPeriods.length} period{selectedPeriods.length !== 1 ? "s" : ""})</span>
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* No periods selected */}
-      {selectedPeriods.length === 0 && initialised && (
-        <div className="bg-muted/20 border rounded-xl p-5 text-center text-muted-foreground text-sm">
-          <CheckCircle2 className="w-6 h-6 mx-auto mb-2 opacity-30" />
-          No periods selected. Toggle the periods above where {teacherName} needs a substitute.
-        </div>
-      )}
-
-      {/* Slot cards for selected periods */}
-      {selectedPeriods.length > 0 && (
+      {/* Slot cards for selected range + diary */}
+      {initialised && (
         <div className="space-y-3 pl-10">
           {selectedPeriods.map((p) => {
             const slot = schedule.find(s => s.period === p);
