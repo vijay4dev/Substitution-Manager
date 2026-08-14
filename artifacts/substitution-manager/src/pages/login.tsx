@@ -21,7 +21,7 @@ export default function Login() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      setLocation("/");
+      setLocation("/absent-teacher");
     } catch (error: any) {
       toast({
         variant: "destructive",
