@@ -39,7 +39,7 @@ export default function PrintView() {
     <div className="min-h-screen bg-white text-black font-serif">
       {/* Non-printable controls */}
       <div className="print:hidden bg-muted p-4 border-b flex justify-between items-center shadow-sm">
-        <Button variant="outline" onClick={() => setLocation("/absent-teacher")}>
+        <Button variant="outline" onClick={() => setLocation("/")}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Assignments
         </Button>
