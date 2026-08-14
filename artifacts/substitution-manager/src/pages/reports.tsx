@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Layout } from "@/components/Layout";
 import { format, startOfWeek, endOfWeek, addDays, subDays, parseISO } from "date-fns";
-import { useSubstitutionsByDateRange } from "@/hooks/use-substitutions";
+import { useSubstitutionsByDateRange, type Substitution } from "@/hooks/use-substitutions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, BarChart3 } from "lucide-react";
@@ -136,16 +136,21 @@ function TeacherRow({ stat }: { stat: any }) {
             <thead>
               <tr className="text-muted-foreground border-b border-border/50">
                 <th className="pb-2 font-medium">Date</th>
-                <th className="pb-2 font-medium">Period</th>
-                <th className="pb-2 font-medium">Class</th>
+                <th className="pb-2 font-medium">Absent Teacher</th>
+                <th className="pb-2 font-medium">Coverage</th>
+                <th className="pb-2 font-medium">Assigned To</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {stat.subs.map((sub: any) => (
+              {stat.subs.map((sub: Substitution) => (
                 <tr key={sub.id}>
                   <td className="py-2">{format(parseISO(sub.date), "EEE, MMM d")}</td>
-                  <td className="py-2">Period {sub.period}</td>
-                  <td className="py-2 font-mono">{sub.class}</td>
+                  <td className="py-2">{sub.absentTeacherName || "—"}</td>
+                  <td className="py-2">
+                    <div className="font-medium">Period {sub.period}</div>
+                    <div className="text-xs text-muted-foreground">{sub.class}</div>
+                  </td>
+                  <td className="py-2 font-medium">{sub.teacherName}</td>
                 </tr>
               ))}
             </tbody>

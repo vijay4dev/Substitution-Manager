@@ -9,6 +9,7 @@ export interface Substitution {
   period: number;
   class: string;
   teacherName: string;
+  absentTeacherName?: string;
   createdAt: any;
 }
 

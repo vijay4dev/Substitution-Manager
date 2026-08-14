@@ -38,10 +38,10 @@ export default function Login() {
       <Card className="w-full max-w-md shadow-lg border-primary/10">
         <CardHeader className="text-center space-y-4 pb-8">
           <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-            <School className="w-8 h-8 text-primary" />
+            <img src="./mskawarlogo.jpg" alt="M.S. Kawar International School, Pali" className="w-full h-full object-fill" />
           </div>
           <div className="space-y-2">
-            <CardTitle className="font-serif text-3xl">Kawar International School, Pali</CardTitle>
+            <CardTitle className="font-serif text-3xl">M.S. Kawar International School, Pali</CardTitle>
             <CardDescription className="text-base">Substitution Manager</CardDescription>
           </div>
         </CardHeader>

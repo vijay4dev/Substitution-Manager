@@ -5,7 +5,6 @@ import { Route, Switch, Router as WouterRouter, Redirect } from 'wouter';
 import { AuthProvider, ProtectedRoute } from '@/lib/auth';
 
 import Login from '@/pages/login';
-import Assignments from '@/pages/assignments';
 import AbsentTeacher from '@/pages/absent-teacher';
 import ImportTimetable from '@/pages/import';
 import PrintView from '@/pages/print';
@@ -19,11 +18,7 @@ function Router() {
       <Route path="/login" component={Login} />
       
       <Route path="/">
-        <Redirect to="/assignments" />
-      </Route>
-
-      <Route path="/assignments">
-        {() => <ProtectedRoute component={Assignments} />}
+        {() => <ProtectedRoute component={AbsentTeacher} />}
       </Route>
       
       <Route path="/import">

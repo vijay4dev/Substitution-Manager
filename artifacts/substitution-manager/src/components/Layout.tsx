@@ -12,7 +12,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { href: "/assignments", label: "Daily Assignments", icon: CalendarDays },
     { href: "/absent-teacher", label: "Absent Teacher", icon: UserX },
     { href: "/reports", label: "Reports", icon: BarChart3 },
     { href: "/import", label: "Import Timetable", icon: FileSpreadsheet },
@@ -25,7 +24,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-6 flex items-center gap-3">
           <School className="w-6 h-6 text-primary" />
           <h1 className="font-serif font-bold text-lg leading-tight">
-            Kawar Int'l
+            M.S. Kawar Int'l
             <br />
             <span className="text-sm text-muted-foreground font-sans font-normal">Substitution Manager</span>
           </h1>

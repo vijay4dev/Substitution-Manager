@@ -338,6 +338,7 @@ function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutio
                 classInfo={slot?.slotValue ?? ""}
                 dayName={dayName}
                 dateStr={dateStr}
+                absentTeacherName={teacherName}
                 substitutions={substitutions}
               />
             );
@@ -347,6 +348,7 @@ function TeacherSection({ teacherName, dayName, dateStr, isSaturday, substitutio
           <DiaryCard
             dateStr={dateStr}
             dayName={dayName}
+            absentTeacherName={teacherName}
             substitutions={substitutions}
             allTeachers={allTeachers}
           />
@@ -363,10 +365,11 @@ interface SlotCardProps {
   classInfo: string;
   dayName: string;
   dateStr: string;
+  absentTeacherName: string;
   substitutions: Substitution[];
 }
 
-function SlotCard({ period, classInfo, dayName, dateStr, substitutions }: SlotCardProps) {
+function SlotCard({ period, classInfo, dayName, dateStr, absentTeacherName, substitutions }: SlotCardProps) {
   const [selectedTeacher, setSelectedTeacher] = useState("");
   const { toast } = useToast();
 
@@ -396,6 +399,7 @@ function SlotCard({ period, classInfo, dayName, dateStr, substitutions }: SlotCa
         period,
         class: classInfo || `Period ${period}`,
         teacherName: selectedTeacher,
+        absentTeacherName,
       });
       setSelectedTeacher("");
       toast({ title: "Assigned", description: `${selectedTeacher} → Period ${period}${classInfo ? ` (${classInfo})` : ""}` });
@@ -500,11 +504,12 @@ function SlotCard({ period, classInfo, dayName, dateStr, substitutions }: SlotCa
 interface DiaryCardProps {
   dateStr: string;
   dayName: string;
+  absentTeacherName: string;
   substitutions: Substitution[];
   allTeachers: string[];
 }
 
-function DiaryCard({ dateStr, dayName, substitutions, allTeachers }: DiaryCardProps) {
+function DiaryCard({ dateStr, dayName, absentTeacherName, substitutions, allTeachers }: DiaryCardProps) {
   const [selectedTeacher, setSelectedTeacher] = useState("");
   const { toast } = useToast();
 
@@ -525,6 +530,7 @@ function DiaryCard({ dateStr, dayName, substitutions, allTeachers }: DiaryCardPr
         period: DIARY_PERIOD,
         class: "Diary",
         teacherName: selectedTeacher,
+        absentTeacherName,
       });
       setSelectedTeacher("");
       toast({ title: "Assigned", description: `${selectedTeacher} → Diary Period` });
